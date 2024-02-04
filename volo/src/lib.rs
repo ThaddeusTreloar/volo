@@ -8,7 +8,10 @@
 mod cfg;
 
 pub use motore::{layer, layer::Layer, service, Service};
+#[cfg(not(feature = "monoio"))]
 pub use tokio::main;
+#[cfg(feature = "monoio")]
+pub use monoio::main;
 
 pub mod context;
 pub mod discovery;
@@ -27,6 +30,7 @@ pub use faststr::FastStr;
 pub use metainfo::METAINFO;
 
 /// volo::spawn will spawn a task and derive the metainfo
+#[cfg(not(feature = "monoio"))]
 pub fn spawn<T>(future: T) -> tokio::task::JoinHandle<T::Output>
 where
     T: futures::Future + Send + 'static,
@@ -42,4 +46,22 @@ where
         .unwrap_or_else(|_| metainfo::MetaInfo::new());
 
     tokio::spawn(METAINFO.scope(std::cell::RefCell::new(mi), future))
+}
+
+#[cfg(feature = "monoio")]
+pub fn spawn<T>(future: T) -> monoio::task::JoinHandle<T::Output>
+where
+    T: futures::Future + 'static,
+    T::Output: 'static,
+{
+    let mi = METAINFO
+        .try_with(|m| {
+            let prev_mi = m.take();
+            let (m1, m2) = prev_mi.derive();
+            m.replace(m1);
+            m2
+        })
+        .unwrap_or_else(|_| metainfo::MetaInfo::new());
+
+    monoio::spawn(METAINFO.scope(std::cell::RefCell::new(mi), future))
 }

@@ -22,6 +22,24 @@ path = "src/hello/thrift_server.rs"
 name = "hello-thrift-client"
 path = "src/hello/thrift_client.rs"
 
+# hello monoio
+[[bin]]
+name = "hello-monoio-grpc-server"
+path = "src/hello_monoio/grpc_server.rs"
+required-features = ["monoio"]
+[[bin]]
+name = "hello-monoio-grpc-client"
+path = "src/hello_monoio/grpc_client.rs"
+required-features = ["monoio"]
+[[bin]]
+name = "hello-monoio-thrift-server"
+path = "src/hello_monoio/thrift_server.rs"
+required-features = ["monoio"]
+[[bin]]
+name = "hello-monoio-thrift-client"
+path = "src/hello_monoio/thrift_client.rs"
+required-features = ["monoio"]
+
 # hello tls
 [[bin]]
 name = "hello-tls-grpc-server"
@@ -90,6 +108,7 @@ bytes.workspace = true
 faststr.workspace = true
 lazy_static.workspace = true
 metainfo.workspace = true
+monoio.workspace = true
 motore.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
@@ -119,4 +138,7 @@ tls = [
     "tokio-rustls",
     "volo/rustls",
     "volo-grpc/rustls",
+]
+monoio = [
+    "volo/monoio"
 ]
