@@ -1,27 +1,33 @@
 use std::{
-    fmt,
-    future::Future,
-    io,
-    task::{Context, Poll},
+    borrow::BorrowMut, fmt, future::Future, io, task::{Context, Poll}
 };
 
 use futures::Stream;
-use pin_project::pin_project;
-use tokio::net::TcpListener;
-#[cfg(target_family = "unix")]
-use tokio::net::UnixListener;
-#[cfg(target_family = "unix")]
-use tokio_stream::wrappers::UnixListenerStream;
-use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
-
 use super::{conn::Conn, Address};
 
-#[pin_project(project = IncomingProj)]
-#[derive(Debug)]
-pub enum DefaultIncoming {
-    Tcp(#[pin] TcpListenerStream),
-    #[cfg(target_family = "unix")]
-    Unix(#[pin] UnixListenerStream),
+#[cfg(not(feature = "monoio"))]
+pub mod tokio_incoming;
+
+#[cfg(feature = "monoio")]
+pub mod monoio_incoming;
+
+use futures::FutureExt;
+#[cfg(not(feature="monoio"))]
+pub use tokio_incoming::*;
+#[cfg(not(feature="monoio"))]
+use tokio::net::{TcpListener, UnixListener};
+#[cfg(feature="monoio")]
+pub use monoio_incoming::*;
+#[cfg(feature="monoio")]
+use monoio::net::{TcpListener, UnixListener};
+
+use tokio_stream::StreamExt;
+
+
+pub trait MakeIncoming {
+    type Incoming: Incoming;
+
+    fn make_incoming(self) -> impl Future<Output = io::Result<Self::Incoming>>;
 }
 
 impl MakeIncoming for DefaultIncoming {
@@ -30,40 +36,6 @@ impl MakeIncoming for DefaultIncoming {
     async fn make_incoming(self) -> io::Result<Self::Incoming> {
         Ok(self)
     }
-}
-
-#[cfg(target_family = "unix")]
-impl From<UnixListener> for DefaultIncoming {
-    fn from(l: UnixListener) -> Self {
-        DefaultIncoming::Unix(UnixListenerStream::new(l))
-    }
-}
-
-impl From<TcpListener> for DefaultIncoming {
-    fn from(l: TcpListener) -> Self {
-        DefaultIncoming::Tcp(TcpListenerStream::new(l))
-    }
-}
-
-pub trait Incoming: fmt::Debug + Send + 'static {
-    fn accept(&mut self) -> impl Future<Output = io::Result<Option<Conn>>> + Send;
-}
-
-impl Incoming for DefaultIncoming {
-    async fn accept(&mut self) -> io::Result<Option<Conn>> {
-        if let Some(conn) = self.try_next().await? {
-            tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
-            Ok(Some(conn))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
-pub trait MakeIncoming {
-    type Incoming: Incoming;
-
-    fn make_incoming(self) -> impl Future<Output = io::Result<Self::Incoming>> + Send;
 }
 
 #[cfg(target_family = "unix")]
@@ -84,6 +56,17 @@ impl MakeIncoming for Address {
     }
 }
 
+impl Incoming for DefaultIncoming {
+    async fn accept(&mut self) -> io::Result<Option<Conn>> {
+        if let Some(conn) = self.try_next().await? {
+            tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
+            Ok(Some(conn))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 #[cfg(not(target_family = "unix"))]
 impl MakeIncoming for Address {
     type Incoming = DefaultIncoming;
@@ -97,6 +80,7 @@ impl MakeIncoming for Address {
     }
 }
 
+#[cfg(not(feature="monoio"))]
 impl Stream for DefaultIncoming {
     type Item = io::Result<Conn>;
 

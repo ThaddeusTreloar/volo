@@ -57,9 +57,14 @@ tokio-native-tls = { workspace = true, optional = true }
 monoio = { workspace = true, optional = true }
 
 [features]
-default = []
-
+default = [
+]
 vendored = ["tokio-native-tls/vendored"]
 rustls = ["tokio-rustls", "librustls"]
 native-tls = ["tokio-native-tls"]
-monoio = ["dep:monoio"]
+thread-safe = [
+    "motore/service_send"
+]
+monoio = [
+    "dep:monoio",
+]

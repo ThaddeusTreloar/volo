@@ -2,13 +2,27 @@ use std::{future::Future, io, net::SocketAddr};
 
 use motore::{make::MakeConnection, service::UnaryService};
 use socket2::{Domain, Protocol, Socket, Type};
+#[cfg(not(feature = "monoio"))]
 #[cfg(target_family = "unix")]
 use tokio::net::UnixStream;
+#[cfg(not(feature = "monoio"))]
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpSocket, TcpStream},
     time::{timeout, Duration},
 };
+
+#[cfg(feature = "monoio")]
+use tokio::io::{AsyncRead, AsyncWrite};
+#[cfg(feature = "monoio")]
+use monoio::{
+    net::TcpStream,
+    time::{timeout, Duration},
+};
+
+#[cfg(feature = "monoio")]
+#[cfg(target_family = "unix")]
+use monoio::net::UnixStream;
 
 use super::{
     conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
@@ -100,6 +114,7 @@ impl MakeTransport for DefaultMakeTransport {
     }
 }
 
+#[cfg(not(feature = "monoio"))]
 async fn make_tcp_connection(cfg: &Config, addr: SocketAddr) -> Result<TcpStream, io::Error> {
     let domain = Domain::for_address(addr);
     let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
@@ -119,6 +134,17 @@ async fn make_tcp_connection(cfg: &Config, addr: SocketAddr) -> Result<TcpStream
     };
 
     let connect = socket.connect(addr);
+
+    if let Some(conn_timeout) = cfg.connect_timeout {
+        timeout(conn_timeout, connect).await?
+    } else {
+        connect.await
+    }
+}
+
+#[cfg(feature = "monoio")]
+async fn make_tcp_connection(cfg: &Config, addr: SocketAddr) -> Result<TcpStream, io::Error> {
+    let connect = TcpStream::connect_addr(addr);
 
     if let Some(conn_timeout) = cfg.connect_timeout {
         timeout(conn_timeout, connect).await?

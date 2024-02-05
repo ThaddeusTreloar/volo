@@ -5,12 +5,46 @@ use std::{
 };
 
 use pin_project::pin_project;
+#[cfg(not(feature = "monoio"))]
 #[cfg(target_family = "unix")]
-use tokio::net::{unix, UnixStream};
+use tokio::net::{
+    UnixStream,
+    unix::{
+        OwnedReadHalf as UnixOwnedReadHalf,
+        OwnedWriteHalf as UnixOwnedWriteHalf,
+    },
+};
+#[cfg(not(feature = "monoio"))]
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
-    net::{tcp, TcpStream},
+    net::{
+        TcpStream,
+        tcp::{
+            OwnedReadHalf as TcpOwnedReadHalf,
+            OwnedWriteHalf as TcpOwnedWriteHalf,
+        },
+    },
 };
+
+#[cfg(feature = "monoio")]
+#[cfg(target_family = "unix")]
+use monoio::net::{
+    UnixStream,
+    unix::{
+        UnixOwnedReadHalf,
+        UnixOwnedWriteHalf,
+    },
+};
+#[cfg(feature = "monoio")]
+use monoio::net::{
+    TcpStream,
+    tcp::{
+        TcpOwnedReadHalf,
+        TcpOwnedWriteHalf
+    }
+};
+#[cfg(feature = "monoio")]
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use super::Address;
 
@@ -44,9 +78,9 @@ cfg_native_tls! {
 
 #[pin_project(project = OwnedWriteHalfProj)]
 pub enum OwnedWriteHalf {
-    Tcp(#[pin] tcp::OwnedWriteHalf),
+    Tcp(#[pin] TcpOwnedWriteHalf),
     #[cfg(target_family = "unix")]
-    Unix(#[pin] unix::OwnedWriteHalf),
+    Unix(#[pin] UnixOwnedWriteHalf),
     #[cfg(feature = "rustls")]
     Rustls(#[pin] RustlsWriteHalf),
     #[cfg(feature = "native-tls")]
@@ -138,9 +172,9 @@ cfg_native_tls! {
 
 #[pin_project(project = OwnedReadHalfProj)]
 pub enum OwnedReadHalf {
-    Tcp(#[pin] tcp::OwnedReadHalf),
+    Tcp(#[pin] TcpOwnedReadHalf),
     #[cfg(target_family = "unix")]
-    Unix(#[pin] unix::OwnedReadHalf),
+    Unix(#[pin] UnixOwnedReadHalf),
     #[cfg(feature = "rustls")]
     Rustls(#[pin] RustlsReadHalf),
     #[cfg(feature = "native-tls")]
